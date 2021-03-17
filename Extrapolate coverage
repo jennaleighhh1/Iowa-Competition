@@ -1,0 +1,177 @@
+```{r}
+library(betareg)
+library(readxl)
+```
+
+
+```{r}
+ihme_vac <- read_excel("C:/Users/jenna/Downloads/2021 Iowa BACC.xlsx", sheet = "IHME Vaccine Coverage")
+ihme_vac_df <- as.data.frame(ihme_vac)
+ihme_vac_df[ihme_vac_df == "null"] <- 0
+ihme_vac_df
+forecasted_df <- ihme_vac_df
+```
+
+
+
+
+```{r}
+year <- (2031:2050)
+reference = 0
+pred<-cbind(year, reference)
+pred <- as.data.frame(pred)
+str(pred)
+```
+
+
+```{r}
+library(betareg)
+filter_vac_df_not0 <- filter_vac_df[filter_vac_df$reference > 0,]
+
+betareg <- betareg(reference ~ year, data=filter_vac_df_not0, y=TRUE)
+betareg
+summary(betareg)
+predictions_ref <- as.data.frame(predict(betareg, pred, type = "response"))
+q = 1
+year[q]
+predictions_ref[[q]]
+#predictions_ref
+```
+
+
+
+
+```{r}
+forecast <- data.frame(matrix(ncol = 6, nrow = 1))
+names(forecast)<-c("iso_code", "Vaccine", "year", "better", "reference", "worse")
+```
+
+```{r}
+predictions_ref<-as.data.frame(cbind(year, reference))
+predictions_better<-as.data.frame(cbind(year, reference))
+predictions_worse<-as.data.frame(cbind(year, reference))
+```
+
+
+```{r}
+library(lme4)
+for (x in unique(ihme_vac_df$iso_code)){
+  filter_df <- ihme_vac_df[ihme_vac_df$iso_code == x,]
+    for(y in unique(filter_df$Vaccine)){
+      filter_vac_df <- filter_df[filter_df$Vaccine == y,]
+      filter_vac_df_ref_not0 <- filter_vac_df[filter_vac_df$reference > 0,]
+      filter_vac_df_better_not0 <- filter_vac_df[filter_vac_df$better > 0,]
+      filter_vac_df_better_not0 <- filter_vac_df[filter_vac_df$better < 0.98,]
+      filter_vac_df_worse_not0 <- filter_vac_df[filter_vac_df$worse > 0,]
+      
+      predictions_ref[,1]<-0
+      if (nrow(filter_vac_df_ref_not0) > 3) {
+        betareg_ref <- betareg(reference ~ year, data=filter_vac_df_ref_not0)
+        predictions_ref <- as.data.frame(predict(betareg_ref, pred, type = "response"))
+      }
+      
+      predictions_better[,1]<-0
+      if (nrow(filter_vac_df_better_not0) > 3) {
+        betareg_better <- betareg(better ~ year, data=filter_vac_df_better_not0)
+        predictions_better <- as.data.frame(predict(betareg_better, pred, type = "response"))
+      }
+      
+      predictions_worse[,1]<-0
+      if (nrow(filter_vac_df_worse_not0) > 9) {
+        betareg_worse <- betareg(worse ~ year, data=filter_vac_df_worse_not0)
+        predictions_worse <- as.data.frame(predict(betareg_worse, pred, type = "response"))
+      }
+      
+      
+      for(z in 1:20){
+        vector_ref <- c(iso_code = x, Vaccine = y, year = year[z], better = 0, reference = predictions_ref$`predict(betareg_ref, pred, type = "response")`[z], worse = predictions_worse$`predict(betareg_worse, pred, type = "response")`[z])
+        forecast <- rbind(forecast, vector_ref)
+      }
+    }
+}
+```
+
+```{r}
+forecasted_df <- rbind(forecasted_df, forecast)
+```
+
+
+```{r}
+View(forecast)
+#print(vector_ref)
+```
+
+
+************everything from here down isnt significant rn
+
+
+```{r}
+write.csv(forecasted_df, file = "ForecastedDF.No.Better.csv")
+```
+
+
+
+
+
+
+
+
+
+
+create forecast frame and years to iteratre through
+
+```{r}
+#forecast <- data.frame(matrix(ncol = 6, nrow = 1))
+#names(forecast)<-c("iso_code", "Vaccine", "year", "better", "reference", "worse")
+#forecast
+#year <- (2030:2050)
+```
+
+remove first row from intercept dataframe
+
+```{r}
+#intercepts <- intercepts[-1,]
+#intercepts
+```
+
+convert dtypes
+
+```{r}
+intercepts$ref.x.int <- as.numeric(intercepts$ref.x.int)
+intercepts$ref.multi.int <- as.numeric(intercepts$ref.multi.int)
+intercepts$better.x.int <- as.numeric(intercepts$better.x.int)
+intercepts$better.multi.int <- as.numeric(intercepts$better.multi.int)
+intercepts$worse.x.int <- as.numeric(intercepts$worse.x.int)
+intercepts$worse.multi.int <- as.numeric(intercepts$worse.multi.int)
+
+str(intercepts)
+```
+
+
+```{r}
+for(i in 1:nrow(intercepts)) {
+    row <- intercepts[i,]
+    for(x in year){
+      addline <- c(iso_code = row$iso_code, Vaccine = row$vaccine, year = x, better = (row$better.x.int +(x*row$better.multi.int)), reference = (row$ref.x.int + (x*row$better.multi.int)), worse = (row$worse.x.int + (x*row$worse.multi.int)))
+      forecasted_df <- rbind(forecasted_df, addline)
+    }
+}
+```
+
+
+```{r}
+#forecasted_df[,4:6] <- lapply(forecasted_df, function(x) ifelse(x>1, 1, x))
+
+```
+
+```{r}
+#write.csv(forecasted_df, file = "Final_IHME_Forecasted to 2050.csv")
+
+```
+
+creating df for intercepts
+```{r}
+intercepts <- data.frame(matrix(ncol = 8, nrow = 1))
+names(intercepts)<-c("iso_code", "vaccine", "ref.x.int", "ref.multi.int", "better.x.int", "better.multi.int", "worse.x.int", "worse.multi.int")
+intercepts
+```
